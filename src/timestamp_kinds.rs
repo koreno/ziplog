@@ -1,0 +1,91 @@
+use chrono::{DateTime, offset::TimeZone, Utc, Duration};
+use std::fmt::Write;
+
+pub struct TimestampKind {
+    regex: regex::Regex,
+    year: String,
+    month: String,
+    day: String,
+    func: Box<dyn for<'a> Fn(&TimestampKind, &mut String, regex::Captures<'a>) -> chrono::format::ParseResult<DateTime<Utc>>>,
+}
+
+impl TimestampKind {
+    pub fn new<F>(regex: &str, f: F) -> Self
+    where
+        F: 'static + for<'a> Fn(&TimestampKind, &mut String, regex::Captures<'a>) -> chrono::format::ParseResult<DateTime<Utc>>
+    {
+        let now = chrono::Utc::now();
+        let year = now.format("%Y").to_string();
+        let month = now.format("%m").to_string();
+        let day = now.format("%d").to_string();
+
+        TimestampKind {
+            year, month, day,
+            regex: regex::Regex::new(regex).unwrap(),
+            func: Box::new(f),
+        }
+    }
+
+    pub fn parse(&self, input: &str, temp_space: &mut String) -> Option<DateTime<Utc>> {
+        temp_space.clear();
+        match (&*self.func)(self, temp_space, self.regex.captures(input)?) {
+            Ok(ts) => Some(ts),
+            Err(_) => None
+        }
+    }
+}
+
+pub fn get_timestamp_kinds() -> Vec<TimestampKind> {
+    vec![
+        // 01:21:27
+        TimestampKind::new(r"^(\d+:\d+:\d+)", |tk, s, caps| {
+            let _ = write!(s, "{}.{}.{} {}", tk.year, tk.month, tk.day, caps.get(1).unwrap().as_str());
+            Utc.datetime_from_str(s, "%Y.%m.%d %H:%M:%S")
+        }),
+
+        // Apr 6 17:13:40
+        TimestampKind::new(r"^(\w{3} +\d+ +\d+:\d+:\d+)", |tk, s, caps| {
+            let _ = write!(s, "{} {}", tk.year, caps.get(1).unwrap().as_str());
+            Utc.datetime_from_str(s, "%Y %b %d %H:%M:%S")
+        }),
+
+        // 2018-12-15T02:11:06+0200
+        TimestampKind::new(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+\d{4})", |_tk, _, caps| {
+            DateTime::parse_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%dT%H:%M:%S%:z")
+                .map(|x|From::from(x))
+        }),
+
+        // 2018-12-15T02:11:06.123456+02:00
+        // 2019-10-09T10:58:45,929228489+03:00
+        TimestampKind::new(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})[.,](\d{6})\d*(\+\d{2}):(\d{2})", |_tk, s, caps| {
+            let _ = write!(s, "{}.{}.{} {}", caps.get(1).unwrap().as_str(), caps.get(2).unwrap().as_str(),
+                caps.get(3).unwrap().as_str(), caps.get(4).unwrap().as_str());
+            Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y %b %d %H:%M:%S")
+        }),
+
+        // 2018-04-06 17:13:40,955
+        // 2018-04-23 04:48:11,811|
+        TimestampKind::new(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),(\d{3})[| ]", |_tk, _, caps| {
+            DateTime::parse_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%dT%H:%M:%S%z")
+                .map(|x| x + Duration::milliseconds(caps.get(2).unwrap().as_str().parse().unwrap()))
+                .map(|x|From::from(x))
+        }),
+
+        // 2018-04-06 17:13:40
+        // 2018-04-06 17:13:40.955356
+        // [2018/04/06 17:13:40
+        // [2018/04/06 17:13:40.955356
+        TimestampKind::new(r"^\[?(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.(\d{6}))?", |_tk, _, caps| {
+            Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%d %H:%M:%S")
+                .map(|x| x + Duration::microseconds(caps.get(2).unwrap().as_str().parse().unwrap()))
+        }),
+
+        // for strace logs
+        // 16255 15:08:52.554223
+        TimestampKind::new(r"\d+ (\d{2}:\d{2}:\d{2}).(\d{6})", |tk, s, caps| {
+            let _ = write!(s, "{}.{}.{} {}", tk.year, tk.month, tk.day, caps.get(1).unwrap().as_str());
+            Utc.datetime_from_str(s, "%Y.%m.%d %H:%M:%S")
+                .map(|x| x + Duration::microseconds(caps.get(2).unwrap().as_str().parse().unwrap()))
+        }),
+    ]
+}
