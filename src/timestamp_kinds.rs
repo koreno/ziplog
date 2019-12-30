@@ -99,3 +99,45 @@ pub fn get_timestamp_kinds() -> Vec<TimestampKind> {
         }),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn main() {
+        let samples = &[
+            "01:21:27",
+            "Apr 6 17:13:40",
+            "2018-12-15T02:11:06+0200",
+            "2018-12-15T02:11:06.123456+02:00",
+            "2019-10-09T10:58:45,929228489+03:00",
+            "2018-04-06 17:13:40,955",
+            "2018-04-23 04:48:11,811|",
+            "2018-04-06 17:13:40",
+            "2018-04-06 17:13:40.955356",
+            "[2018/04/06 17:13:40",
+            "[2018/04/06 17:13:40.955356",
+            "16255 15:08:52.554223",
+        ];
+
+        for sample in samples {
+            let string = format!("{}{}", sample, " log line");
+            let mut matches = 0;
+
+            for (index, kind) in get_timestamp_kinds().iter().enumerate() {
+                match kind.parse(&string, &mut String::new()) {
+                    None => {},
+                    Some(value) => {
+                        println!("kind {} matched sample {:?}, got value {:?}", index, sample, value);
+                        matches += 1;
+                    }
+                }
+            }
+
+            if matches == 0 {
+                panic!("sample {:?} did not match any timestamp kind", sample);
+            }
+        }
+    }
+}
