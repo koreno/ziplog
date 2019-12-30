@@ -25,8 +25,9 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -i, --interval <interval>    Show interval by seconds (s), or milliseconds (ms)
-    -p, --prefix <prefix>        A prefix to prepend to timestamped lines [default: > ]
+    -i, --interval <interval>                 Show interval by seconds (s), or milliseconds (ms)
+    -p, --prefix <prefix>                     The default prefix to prepend to timestamped lines [default: > ]
+    -f, --prefixed-file <prefixed-logs>...    Prefixed log files, using a different prefix for each timestamped file
 
 ARGS:
     <FILE>...    Log files; Use "-" for STDIN

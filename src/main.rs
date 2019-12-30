@@ -12,10 +12,24 @@ use std::io::Write;
 use std::fs::File;
 use std::rc::Rc;
 
+#[derive(Debug)]
+struct PrefixedFile(String, PathBuf);
+
+impl std::str::FromStr for PrefixedFile {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.find('=') {
+            None => Self("".to_owned(), PathBuf::from(s)),
+            Some(index) => Self(s[..index].to_owned(), PathBuf::from(&s[index + 1..])),
+        })
+    }
+}
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "ziplog", about = "ZipLog - merge logs by timestamps")]
 struct Opt {
-    /// A prefix to prepend to timestamped lines
+    /// The default prefix to prepend to timestamped lines
     #[structopt(short = "p", long = "prefix", default_value = "> ")]
     prefix: String,
 
@@ -26,8 +40,40 @@ struct Opt {
     /// Log files; Use "-" for STDIN
     #[structopt(name = "FILE")]
     logs: Vec<PathBuf>,
+
+    /// Prefixed log files, using a different prefix for each timestamped file
+    #[structopt(short = "f", long = "--prefixed-file")]
+    prefixed_logs: Vec<PrefixedFile>,
 }
 
+type Stream = Box<dyn Iterator<Item=(Option<DateTime<Utc>>, String)>>;
+
+fn add_stream(path: &PathBuf, prefix: &String, timestamp_kinds: &PossibleTimestampKinds,
+    stdin_found: &mut bool, streams: &mut Vec<Stream>) -> std::io::Result<()>
+{
+    let stream : Box<dyn Iterator<Item=(Option<DateTime<Utc>>, String)>> = if path == &PathBuf::from("-") {
+        if *stdin_found {
+            return Ok(());
+        }
+
+        *stdin_found = true;
+        Box::new(TimestampedStream::new(std::io::stdin(),
+            prefix.clone(), timestamp_kinds.clone()))
+    } else {
+        let file = match File::open(&path) {
+            Err(err) => {
+                eprintln!("Error opening file: {:?}", path);
+                return Err(err);
+            }
+            Ok(v) => v,
+        };
+        Box::new(TimestampedStream::new(file,
+            prefix.clone(), timestamp_kinds.clone()))
+    };
+
+    streams.push(stream);
+    Ok(())
+}
 
 fn main() -> std::io::Result<()> {
     // Command line parsing
@@ -57,27 +103,11 @@ fn main() -> std::io::Result<()> {
     let mut stdin_found = false;
 
     for path in opt.logs {
-        let stream : Box<dyn Iterator<Item=(Option<DateTime<Utc>>, String)>> =
-            if path == PathBuf::from("-") {
-                if stdin_found {
-                    continue;
-                }
+        add_stream(&path, &opt.prefix, &timestamp_kinds, &mut stdin_found, &mut streams)?;
+    }
 
-                stdin_found = true;
-                Box::new(TimestampedStream::new(std::io::stdin(),
-                    opt.prefix.clone(), timestamp_kinds.clone()))
-            } else {
-                let file = match File::open(&path) {
-                    Err(err) => {
-                        eprintln!("Error opening file: {:?}", path);
-                        return Err(err);
-                    }
-                    Ok(v) => v,
-                };
-                Box::new(TimestampedStream::new(file,
-                    opt.prefix.clone(), timestamp_kinds.clone()))
-            };
-        streams.push(stream);
+    for prefixed_log in opt.prefixed_logs {
+        add_stream(&prefixed_log.1, &prefixed_log.0, &timestamp_kinds, &mut stdin_found, &mut streams)?;
     }
 
     // Iterate-merge all the lines
