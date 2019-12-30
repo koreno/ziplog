@@ -35,6 +35,9 @@ impl TimestampKind {
     }
 }
 
+// Regex syntax at: https://docs.rs/regex/1.3.1/regex/#syntax
+// Time format at: https://docs.rs/chrono/0.4.7/chrono/format/strftime/index.html
+
 pub fn get_timestamp_kinds() -> Vec<TimestampKind> {
     vec![
         // 01:21:27
@@ -58,26 +61,33 @@ pub fn get_timestamp_kinds() -> Vec<TimestampKind> {
         // 2018-12-15T02:11:06.123456+02:00
         // 2019-10-09T10:58:45,929228489+03:00
         TimestampKind::new(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})[.,](\d{6})\d*(\+\d{2}):(\d{2})", |_tk, s, caps| {
-            let _ = write!(s, "{}.{}.{} {}", caps.get(1).unwrap().as_str(), caps.get(2).unwrap().as_str(),
+            let _ = write!(s, "{}.{}{}{}", caps.get(1).unwrap().as_str(), caps.get(2).unwrap().as_str(),
                 caps.get(3).unwrap().as_str(), caps.get(4).unwrap().as_str());
-            Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y %b %d %H:%M:%S")
+            DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f%z").map(|x|From::from(x))
         }),
 
         // 2018-04-06 17:13:40,955
         // 2018-04-23 04:48:11,811|
         TimestampKind::new(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),(\d{3})[| ]", |_tk, _, caps| {
             DateTime::parse_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%dT%H:%M:%S%z")
-                .map(|x| x + Duration::milliseconds(caps.get(2).unwrap().as_str().parse().unwrap()))
+                .map(|x|x + Duration::milliseconds(caps.get(2).unwrap().as_str().parse().unwrap()))
                 .map(|x|From::from(x))
         }),
 
         // 2018-04-06 17:13:40
-        // 2018-04-06 17:13:40.955356
-        // [2018/04/06 17:13:40
-        // [2018/04/06 17:13:40.955356
+        // [2018-04-06 17:13:40.955356
         TimestampKind::new(r"^\[?(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.(\d{6}))?", |_tk, _, caps| {
+            let microseconds = caps.get(2).map(|x|x.as_str().parse().unwrap()).unwrap_or(0);
             Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%d %H:%M:%S")
-                .map(|x| x + Duration::microseconds(caps.get(2).unwrap().as_str().parse().unwrap()))
+                .map(|x| x + Duration::microseconds(microseconds))
+        }),
+
+        // 2018/04/06 17:13:40
+        // [2018/04/06 17:13:40.955356
+        TimestampKind::new(r"^\[?(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})(?:\.(\d{6}))?", |_tk, _, caps| {
+            let microseconds = caps.get(2).map(|x|x.as_str().parse().unwrap()).unwrap_or(0);
+            Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y/%m/%d %H:%M:%S")
+                .map(|x| x + Duration::microseconds(microseconds))
         }),
 
         // for strace logs
