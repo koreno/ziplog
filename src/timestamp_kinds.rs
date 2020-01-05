@@ -68,8 +68,8 @@ pub fn get_timestamp_kinds() -> Vec<TimestampKind> {
 
         // 2018-04-06 17:13:40,955
         // 2018-04-23 04:48:11,811|
-        TimestampKind::new(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),(\d{3})[| ]", |_tk, _, caps| {
-            DateTime::parse_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%dT%H:%M:%S%z")
+        TimestampKind::new(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),(\d{3})[| ]?", |_tk, _, caps| {
+            Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%d %H:%M:%S")
                 .map(|x|x + Duration::milliseconds(caps.get(2).unwrap().as_str().parse().unwrap()))
                 .map(|x|From::from(x))
         }),
