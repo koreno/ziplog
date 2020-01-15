@@ -90,6 +90,14 @@ pub fn get_timestamp_kinds() -> Vec<TimestampKind> {
                 .map(|x| x + Duration::microseconds(microseconds))
         }),
 
+        // for sshd logs
+        // 1564 2020-01-15 14:54:14.558
+        TimestampKind::new(r"\d+ (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).(\d{3})", |_tk, _, caps| {
+            Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%d %H:%M:%S")
+                .map(|x|x + Duration::milliseconds(caps.get(2).unwrap().as_str().parse().unwrap()))
+                .map(|x|From::from(x))
+        }),
+
         // for strace logs
         // 16255 15:08:52.554223
         TimestampKind::new(r"\d+ (\d{2}:\d{2}:\d{2}).(\d{6})", |tk, s, caps| {
@@ -115,6 +123,7 @@ mod tests {
             "2018-04-06 17:13:40,955",
             "2018-04-23 04:48:11,811|",
             "2018-04-06 17:13:40",
+            "1564 2020-01-15 14:54:14.558",
             "2018-04-06 17:13:40.955356",
             "[2018/04/06 17:13:40",
             "[2018/04/06 17:13:40.955356",
