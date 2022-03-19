@@ -60,6 +60,12 @@ pub fn get_timestamp_kinds() -> Vec<TimestampKind> {
             DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f%z").map(|x|From::from(x))
         }),
 
+        // Same as above, but with milliseconds
+        TimestampKind::new(r"^(?:\d+\s+|\[|^)(\d{4}[/\-]\d{2}[/\-]\d{2}[ T]\d{2}:\d{2}:\d{2})(?:[.,](\d{3}))?", |_tk, _, caps| {
+            let milliseconds = caps.get(2).map(|x|x.as_str().parse().unwrap()).unwrap_or(0);
+            Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%d %H:%M:%S")
+                .map(|x| x + Duration::milliseconds(milliseconds))
+        }),
 
         // 2018-04-06 17:13:40
         // [2018-04-06 17:13:40.955356
@@ -71,14 +77,7 @@ pub fn get_timestamp_kinds() -> Vec<TimestampKind> {
             Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%d %H:%M:%S")
                 .map(|x| x + Duration::microseconds(microseconds))
         }),
-
-        // Same as above, but with milliseconds
-        TimestampKind::new(r"^(?:\d+\s+|\[|^)(\d{4}[/\-]\d{2}[/\-]\d{2}[ T]\d{2}:\d{2}:\d{2})(?:[.,](\d{3}))?", |_tk, _, caps| {
-            let milliseconds = caps.get(2).map(|x|x.as_str().parse().unwrap()).unwrap_or(0);
-            Utc.datetime_from_str(caps.get(1).unwrap().as_str(), "%Y-%m-%d %H:%M:%S")
-                .map(|x| x + Duration::milliseconds(milliseconds))
-        }),
-
+   
         // for strace logs
         // 01:21:27
         // 01:21:27.554223
