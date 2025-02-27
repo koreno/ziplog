@@ -67,6 +67,12 @@ pub fn get_timestamp_kinds() -> Vec<TimestampKind> {
                 .map(|x| x + Duration::milliseconds(milliseconds))
         }),
 
+        // 2025-02-25T00:20:58.907788332Z
+        TimestampKind::new(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\.(\d{6})\d*Z", |_tk, s, caps| {
+            let _ = write!(s, "{}.{}+00:00", caps.get(1).unwrap().as_str(), caps.get(2).unwrap().as_str());
+            DateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f%z").map(|x| From::from(x))
+        }),
+
         // 2018-04-06 17:13:40
         // [2018-04-06 17:13:40.955356
         // 1234 2018/04/06 17:13:40.955356
